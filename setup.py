@@ -19,7 +19,7 @@ def get_version():
     """
     Read version
     """
-    txt = (WORK_DIR / 'scraper' / "__init__.py").read_text("utf-8")
+    txt = (WORK_DIR / "scraper" / "__init__.py").read_text("utf-8")
     try:
         return re.findall(
             r"^__version__\s+=\s+['|\"]([^']+)['|\"]\r?$", txt, re.M
