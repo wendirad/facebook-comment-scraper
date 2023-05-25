@@ -1,18 +1,23 @@
 import argparse
+import itertools
 import json
 import logging
 import sys
+import threading
+import time
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
-
+START_TIME = time.time()
 COUNTER = 1
+ON_PROGRESS = True
+PROCESS = None
+
 
 class FacebookCommentScraper:
-
     def __init__(
         self, driver: webdriver.Chrome, url: str, averege_wait_time: int = 10
     ):
@@ -22,9 +27,23 @@ class FacebookCommentScraper:
         self.data = []
         logging.debug(f"Scraping comments from {url}")
 
-    def scrape(self):
-        global COUNTER
+    def __animate_loading(self, msg="Loading "):
+        global ON_PROGRESS
+        for c in itertools.cycle(["⠯", "⠟", "⠻", "⠽", "⠾", "⠷"]):
+            if not ON_PROGRESS:
+                break
+            sys.stdout.write("\r" + msg + c)
+            sys.stdout.flush()
+            time.sleep(0.1)
 
+    def scrape(self):
+        global COUNTER, PROCESS
+        PROCESS = threading.Thread(
+            target=self.__animate_loading, args=(" 🔘 Scraping comments ",)
+        )
+        PROCESS.start()
+
+        logging.debug(f"Loading animation started {self.url}")
         # Load page
         self.driver.get(self.url)
         logging.debug(f"Page loaded {self.url}")
@@ -89,7 +108,9 @@ class FacebookCommentScraper:
             while commentFilter := self.driver.find_element(
                 By.XPATH, '//a[contains(., "more comments")]'
             ):
-                self.driver.execute_script("arguments[0].click();", commentFilter)
+                self.driver.execute_script(
+                    "arguments[0].click();", commentFilter
+                )
                 self.driver.implicitly_wait(self.averege_wait_time)
                 logging.debug(f"Clicked on more comments {self.url}")
         except Exception as err:
@@ -123,11 +144,12 @@ class FacebookCommentScraper:
             COUNTER += 1
             logging.debug(f"Counter increased {COUNTER}")
 
-        print(f"Comments scraped: {len(comments)} {self.url}")
+        print(f"\r✔️ {len(comments)} Comments scraped from {self.url}")
         return self.data
 
 
 def main():
+    global ON_PROGRESS, PROCESS
     # Process command line arguments
     parser = argparse.ArgumentParser(
         description="Process comment scraping from facebook post."
@@ -151,22 +173,39 @@ def main():
 
     # Setup selenium webdriver
     options = webdriver.ChromeOptions()
+    options.add_argument("log-level=3")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--ignore-certificate-errors")
+    options.add_argument("--ignore-certificate-errors-spki-list")
+    options.add_argument("--ignore-ssl-errors")
+    options.add_argument("--headless")
     options.add_extension("./extension_1_0_4_0.crx")
     logging.debug("Extension added to webdriver")
 
-    driver = webdriver.Chrome(options=options)
+    driver = webdriver.Chrome(
+        options=options,
+        executable_path=(
+            "./chromedriver"
+            if sys.platform == "linux"
+            else "./chromedriver.exe"
+        ),
+    )
     logging.debug("Webdriver started")
 
     # Scrape comments
     datas = []
 
     for url in args.urls:
-        try:
-            scraper = FacebookCommentScraper(driver, url)
-            datas += scraper.scrape()
-            logging.debug(f"Comments scraped from {url}")
-        except Exception as err:
-            logging.info(err)
+        try_count = 0
+        while try_count < 3:
+            try:
+                scraper = FacebookCommentScraper(driver, url, 5)
+                datas += scraper.scrape()
+                logging.debug(f"Comments scraped from {url}")
+                break
+            except Exception as err:
+                logging.info(err)
+                try_count += 1
 
     if args.output is not None:
         logging.debug(f"Output file {args.output}")
@@ -180,7 +219,16 @@ def main():
     driver.quit()
     logging.debug("Webdriver closed")
 
-    print("Scraping done!")
+    ON_PROGRESS = False
+    PROCESS.join()
+    STOP_TIME = time.time()
+    print("\r✨✨ Scraping Done! ✨✨")
+    # Create table for time elapsed and total comments scraped
+    print(
+        f"{'-' * 40}\n{'💠 Total Comments ':<25}|{COUNTER-1:>5}\n{'-' * 40}\n"
+        f"{'⏰ Time Elapsed (Min)':<25}|{(STOP_TIME - START_TIME)/60:.>2f}"
+        f"\n{'-' * 40}"
+    )
 
 
 if __name__ == "__main__":

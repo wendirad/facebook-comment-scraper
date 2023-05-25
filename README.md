@@ -4,7 +4,7 @@
 ## Requirements
 
 * Python 3.8+
-* Chrome Browser
+* Chrome Browser (113.0.5672.126 or higher)
 
 ## Development
 
