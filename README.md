@@ -34,7 +34,7 @@ options:
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[GNU GENERAL PUBLIC LICENSE V3](LICENSE)
 
 ## Author
 
